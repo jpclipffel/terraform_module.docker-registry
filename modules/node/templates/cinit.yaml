@@ -1,0 +1,96 @@
+#cloud-config
+
+# =====================================================================
+# Users, authentication and misc.
+# =====================================================================
+
+users:
+  - name: ansctl
+    gecos: ansctl
+    lock_passwd: false
+    plain_text_passwd: ansctl
+    groups: sudo, users, admin
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+disable_root: true
+ssh_pwauth: yes
+hostname: ${hostname}
+
+# =====================================================================
+# Config-time setup
+# =====================================================================
+
+write_files:
+  # Disable automatic Netplan configuration
+  - path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    content: |
+      network: { config: disabled }
+  # Custom Netplan configuration
+  - path: /etc/netplan/50-cloud-init.yaml
+    content: |
+        network:
+            version: 2
+            ethernets:
+                ens192:
+                    addresses:
+                        - ${network_ip}
+                    gateway4: 172.29.42.1
+                    nameservers:
+                        addresses:
+                            - 172.29.245.1
+                        search:
+                            - dt.ept.lu
+  # Docker registry config
+  - path: /etc/docker/registry/config.yml
+    content: |
+        version: 0.1
+        log:
+            fields:
+                service: registry
+        storage:
+            cache:
+                blobdescriptor: inmemory
+            filesystem:
+                rootdirectory: /var/lib/registry
+        http:
+            addr: :5000
+            headers:
+                X-Content-Type-Options: [nosniff]
+        health:
+            storagedriver:
+                enabled: true
+                interval: 10s
+                threshold: 3
+        proxy:
+            remoteurl: https://registry-1.docker.io
+            username: ${docker_hub_username}
+            password: ${docker_hub_password}
+
+
+# =====================================================================
+# Run-time setup
+# =====================================================================
+
+runcmd:
+# Apply Netplan configuration
+- netplan apply
+# Set hostname
+- hostnamectl set-hostname ${hostname}
+# Cleanup Docker
+- apt-get remove -y docker docker-engine docker.io containerd runc
+# Install Docker dependencies
+- apt-get update
+- apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+# Add Docker GPG key
+- curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+- echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# Install Docker
+- apt-get update
+- apt-get install -y docker-ce docker-ce-cli containerd.io
+# Prepare registry environment
+- mkdir /var/lib/registry
+# Login to Docker Hub
+- docker login -u ${docker_hub_username} -p ${docker_hub_password}
+# Run Docker registry
+- docker run -d -p 5000:5000 --restart=always --name registry -v /etc/docker/registry/config.yml:/etc/docker/registry/config.yml -v /var/lib/registry:/var/lib/registry registry:2
