@@ -1,24 +1,15 @@
 # Docker Registry
 
-Docker registries (proxy / pull cache).
+A Terraform module to deploy a Docker registry (uses the `vsphere` provider).
 
 ## Usage
 
-* Clone this repository
-* Run `terraform init`, `terraform plan` and `terraform apply`
-
-You may export the folowing variables before:
+You may export the folowing variables:
 
 | Variable              | Description         | Export example                            |
 |-----------------------|---------------------|-------------------------------------------|
 | `docker_hub_username` | Docker Hub username | `export TF_VAR_docker_hub_username="..."` |
 | `docker_hub_password` | Docker Hub password | `export TF_VAR_docker_hub_password="..."` |
-
-## Modules
-
-| Path           | Description          |
-|----------------|----------------------|
-| `modules/node` | Docker registry node |
 
 ## Docker client configuration
 
@@ -39,4 +30,4 @@ Docker's `/etc/docker/daemon.json`:
 }
 ```
 
-The restart your Docker daemon: `sudo systemctl restart docker`
+Then restart your Docker daemon: `sudo systemctl restart docker`
